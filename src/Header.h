@@ -308,38 +308,41 @@ public:
 	}
 };
 
+struct BeamData {
+	double massPerLength{ 0.0 };
+	double depthOfSection{ 0.0 };
+	double widthOfSection{ 0.0 };
+	double thicknessOfWeb{ 0.0 };
+	double thicknessOfFlange{ 0.0 };
+	double rootRadius{ 0.0 };
+	double depthBetweenFillets{ 0.0 };
+	double ratioOfLocalBucklingFlange{ 0.0 };
+	double ratioOfLocalBucklingWeb{ 0.0 };
+	double secondMomentOfAreaXX{ 0.0 };
+	double secondMomentOfAreaYY{ 0.0 };
+	double radiusOfGyrationXX{ 0.0 };
+	double radiusOfGyrationYY{ 0.0 };
+
+	double elasticModulusXX{ 0.0 };
+	double elasticModulusYY{ 0.0 };
+	double plasticModulusXX{ 0.0 };
+	double plasticModulusYY{ 0.0 };
+	double buckingParameter{ 0.0 };
+	double torsionalIndex{ 0.0 };
+	double warpingConstant{ 0.0 };
+	double torsionalConstant{ 0.0 };
+	double areaOfSection{ 0.0 };
+};
+
 class Beam
 {
 private:
 	double length;
+	BeamData beamData;
 	std::vector<Force> forces;
 	std::vector<Moment> moments;
 	std::vector<Support *> supports;
 	std::string dimension;
-
-	double massPerLength;
-	double depthOfSection;
-	double widthOfSection;
-	double thicknessOfWeb;
-	double thicknessOfFlange;
-	double rootRadius;
-	double depthBetweenFillets;
-	double ratioOfLocalBucklingFlange;
-	double ratioOfLocalBucklingWeb;
-	double secondMomentOfAreaXX;
-	double secondMomentOfAreaYY;
-	double radiusOfGyrationXX;
-	double radiusOfGyrationYY;
-
-	double elasticModulusXX;
-	double elasticModulusYY;
-	double plasticModulusXX;
-	double plasticModulusYY;
-	double buckingParameter;
-	double torsionalIndex;
-	double warpingConstant;
-	double torsionalConstant;
-	double areaOfSection;
 public:
 	// Have to have the default constructor due to the compiler not making one when a custom constructor is declared.
 	Beam()
@@ -354,123 +357,189 @@ public:
 		this->supports = *supportPointer;
 	}
 
-	void getData(std::string dimension)
+	BeamData getData(std::string dimension, std::string mpl)
 	{
 		this->dimension = dimension;
 
-		std::string data;
+		std::vector<std::string> fileData;
+		std::string data2 = "";
 
 		std::ifstream beamdata1("./data/beamdata.txt");
-		//std::ifstream beamdata2("./data/beamdat2.txt");
+		std::ifstream beamdata2("./data/beamdata2.txt");
+		std::ifstream beamdatatotalread("./data/beamdata3.txt");
 
-		std::string temp;
+		//beamdatatotal << beamdata1.rdbuf() << beamdata2.rdbuf();
 
-		while (std::getline(beamdata1, temp))
+		std::string temp = "";
+		std::string temp2 = "";
+
+		char fileSelection = 0;
+		bool dimensionFound = false;
+		bool lineFound = false;
+
+		while (std::getline(beamdatatotalread, temp, '-'))
 		{
-			data += temp;
-		}
+			fileData.push_back(temp);
 
-		/*while (std::getline(beamdata2, temp))
-		{
-			std::wcout << data << "\n";
-		}*/
+			std::string dimensionC = "=" + dimension;
 
-		std::string delimiter = "=";
-
-		size_t pos = 0;
-		std::string token = "";
-
-		// Finds the correct dimension
-		while ((pos = data.find(delimiter)) != std::string::npos) {
-			token = data.substr(0, pos);
-
-			std::string delimiter2 = "-";
-			size_t pos2 = 0;
-			std::string token2;
-
-
-			std::string formattedDimension = token.substr(0, token.find("-"));
+			std::string formattedDimension = temp;
 
 			formattedDimension.erase(std::remove_if(formattedDimension.begin(), formattedDimension.end(), isspace), formattedDimension.end());
 
-			std::cout << "Dimension : '" << formattedDimension << "'" << std::endl;
-
-
-			// If the line has the correct dimension
-			if (formattedDimension.compare(dimension) == 0)
+			if (formattedDimension.compare(dimensionC) == 0)
 			{
-				while ((pos2 = token.find(delimiter2)) != std::string::npos) {
-					token2 = token.substr(0, pos2);
+				dimensionFound = true;
+			}
+			
+			if (dimensionFound)
+			{
+				std::string delimiter3 = " ";
+				size_t pos3 = 0;
+				size_t pos4 = 0;
+				std::string token3;
+				int dataType = 0;
 
-					std::cout << "Mass Per Metre : " << token2 << std::endl;
+				while ((pos3 = temp.find(delimiter3)) != std::string::npos) {
+					token3 = temp.substr(0, pos3);
 
-					std::string delimiter3 = " ";
-					size_t pos3 = 0;
-					std::string token3;
+					// Different position of mpl for each file
+					if (fileSelection == 1 && lineFound == false)
+					{
+						char x = 0;
 
-					int dataType = 0;
+						pos4 = 0;
 
-					while ((pos3 = token2.find(delimiter3)) != std::string::npos) {
-						token3 = token2.substr(0, pos3);
-
-						switch (dataType)
+						// Used to keep the last value of the line
+						std::string temp2 = temp;
+						while ((pos4 = temp2.find(delimiter3)) != std::string::npos)
 						{
-							case 1:
-								massPerLength = std::stod(token3);
-								break;
-							case 2:
-								depthOfSection = std::stod(token3);
-								break;
+							token3 = temp2.substr(0, pos4); 
 
-							case 3:
-								widthOfSection = std::stod(token3);
-								break;
+							if (x == 11)
+							{
+								std::string formattedToken = token3;
 
-							case 4:
-								thicknessOfWeb = std::stod(token3);
-								break;
+								formattedToken.erase(std::remove_if(formattedToken.begin(), formattedToken.end(), isspace), formattedToken.end());
 
-							case 5:
-								thicknessOfFlange = std::stod(token3);
+								token3 = formattedToken;
+
 								break;
-							case 6:
-								rootRadius = std::stod(token3);
-								break;
-							case 7:
-								depthBetweenFillets = std::stod(token3);
-								break;
-							case 8:
-								ratioOfLocalBucklingFlange = std::stod(token3);
-								break;
-							case 9:
-								ratioOfLocalBucklingWeb = std::stod(token3);
-								break;
-							case 10:
-								secondMomentOfAreaXX = std::stod(token3);
-								break;
-							case 11:
-								secondMomentOfAreaYY = std::stod(token3);
-								break;
-							case 12:
-								radiusOfGyrationXX = std::stod(token3);
-								break;
-							case 13:
-								radiusOfGyrationYY = std::stod(token3);
-								break;
+							}
+							else 
+							{
+								temp2.erase(0, pos4 + delimiter3.length());
+								x++;
+							}
+							
 						}
-
-						dataType++;
-						token2.erase(0, pos3 + delimiter3.length());
 					}
 
-					token.erase(0, pos2 + delimiter2.length());
+					// Only add data when its the correct 
+					if (token3.compare(mpl) == 0 || lineFound)
+					{
+						lineFound = true;
+						if (fileSelection == 1)
+						{
+							switch (dataType)
+							{
+								case 0:
+									beamData.elasticModulusXX = std::stod(token3);
+									break;
+								case 1:
+									beamData.elasticModulusYY = std::stod(token3);
+									break;
+								case 2:
+									beamData.plasticModulusXX = std::stod(token3);
+									break;
+								case 3:
+									beamData.plasticModulusYY = std::stod(token3);
+									break;
+								case 4:
+									beamData.buckingParameter = std::stod(token3);
+									break;
+								case 5:
+									beamData.torsionalIndex = std::stod(token3);
+									break;
+								case 6:
+									beamData.warpingConstant = std::stod(token3);
+									break;
+								case 7:
+									beamData.torsionalConstant = std::stod(token3);
+									break;
+								case 8:
+									beamData.areaOfSection = std::stod(token3);
+									dimensionFound = false;
+									lineFound = false;
+									break;
+							}
+
+							dataType++;
+							temp.erase(0, pos3 + delimiter3.length());
+						}
+						else
+						{
+							switch (dataType)
+							{
+								case 1:
+									beamData.massPerLength = std::stod(token3);
+									break;
+								case 2:
+									beamData.depthOfSection = std::stod(token3);
+									break;
+								case 3:
+									beamData.widthOfSection = std::stod(token3);
+									break;
+								case 4:
+									beamData.thicknessOfWeb = std::stod(token3);
+									break;
+								case 5:
+									beamData.thicknessOfFlange = std::stod(token3);
+									break;
+								case 6:
+									beamData.rootRadius = std::stod(token3);
+									break;
+								case 7:
+									beamData.depthBetweenFillets = std::stod(token3);
+									break;
+								case 8:
+									beamData.ratioOfLocalBucklingFlange = std::stod(token3);
+									break;
+								case 9:
+									beamData.ratioOfLocalBucklingWeb = std::stod(token3);
+									break;
+								case 10:
+									beamData.secondMomentOfAreaXX = std::stod(token3);
+									break;
+								case 11:
+									beamData.secondMomentOfAreaYY = std::stod(token3);
+									break;
+								case 12:
+									beamData.radiusOfGyrationXX = std::stod(token3);
+									break;
+								case 13:
+									beamData.radiusOfGyrationYY = std::stod(token3);
+									dimensionFound = false;
+									lineFound = false;
+									fileSelection++;
+									break;
+							}
+
+							dataType++;
+							temp.erase(0, pos3 + delimiter3.length());
+						}
+					}
+					else 
+					{
+						break;
+					}
 				}
 			}
-
-			data.erase(0, pos + delimiter.length());
+			temp = "";
 		}
 
-		//std::cout << data << std::endl;
+		return beamData;
+
 	}
 
 	void addSupport(Support* support)

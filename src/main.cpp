@@ -16,7 +16,9 @@ int main()
 	std::vector<Force> forces = {Force(-3000, 90, 2), Force(-5000, 90, 3), Force(-2000, 90, 4)}; 
 	beam.setForces(&forces);
 
-	beam.getData("406x140");
+	BeamData beamdata = beam.getData("406x178", "74");
+
+	std::cout << beamdata.thicknessOfFlange << std::endl;
 
 	std::cin >> x;
 }
