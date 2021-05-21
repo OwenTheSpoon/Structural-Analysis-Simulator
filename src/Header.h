@@ -23,13 +23,26 @@ public:
 	}
 
 	// Force in Newtons (N)
-	Force(double force, double angle, double position)
+	/*Force(double force, double angle, double position)
 	{
 		this->force = force;
 		this->angle = angle;
 		this->position = position;
+	}*/
+
+	// Force in Newtons (N)
+	Force(double permForce, double varForce, double position)
+	{
+		this->permForce = permForce;
+		this->varForce = varForce;
+		this->position = position;
 	}
 
+	Force(double force, double position)
+	{
+		this->force = force;
+		this->position = position;
+	}
 
 	void setPermanent(bool ULS, double force)
 	{
@@ -43,9 +56,16 @@ public:
 		}
 	}
 
-	double getPermanent()
+	double getPermanent(bool ULS)
 	{
-		return permForce;
+		if (ULS)
+		{
+			return permForce * 1.35;
+		}
+		else
+		{
+			return permForce;
+		}
 	}
 
 	void setVariable(bool ULS, double force)
@@ -60,9 +80,16 @@ public:
 		}
 	}
 
-	double getVariable()
+	double getVariable(bool ULS)
 	{
-		return varForce;
+		if (ULS)
+		{
+			return varForce * 1.5;
+		}
+		else
+		{
+			return varForce;
+		}
 	}
 
 	void setPosition(double position)
@@ -239,7 +266,7 @@ public:
 
 	void addToReactionForce(Force force)
 	{
-		reactionForce.setForce(reactionForce.getForce() + force.getForce());
+		reactionForce.setForce(force.getForce());
 	}
 
 	void setPosition(double position)
@@ -309,29 +336,48 @@ public:
 };
 
 struct BeamData {
-	double massPerLength{ 0.0 };
-	double depthOfSection{ 0.0 };
-	double widthOfSection{ 0.0 };
-	double thicknessOfWeb{ 0.0 };
-	double thicknessOfFlange{ 0.0 };
-	double rootRadius{ 0.0 };
-	double depthBetweenFillets{ 0.0 };
-	double ratioOfLocalBucklingFlange{ 0.0 };
-	double ratioOfLocalBucklingWeb{ 0.0 };
-	double secondMomentOfAreaXX{ 0.0 };
-	double secondMomentOfAreaYY{ 0.0 };
-	double radiusOfGyrationXX{ 0.0 };
-	double radiusOfGyrationYY{ 0.0 };
+	std::string dimension;
 
-	double elasticModulusXX{ 0.0 };
-	double elasticModulusYY{ 0.0 };
-	double plasticModulusXX{ 0.0 };
-	double plasticModulusYY{ 0.0 };
-	double buckingParameter{ 0.0 };
-	double torsionalIndex{ 0.0 };
-	double warpingConstant{ 0.0 };
-	double torsionalConstant{ 0.0 };
-	double areaOfSection{ 0.0 };
+	int steelType = 1;
+
+
+	double massPerLength{ 0.0 };				//0
+	double depthOfSection{ 0.0 };				//1
+	double widthOfSection{ 0.0 };				//2
+	double thicknessOfWeb{ 0.0 };				//3
+	double thicknessOfFlange{ 0.0 };			//4
+	double rootRadius{ 0.0 };					//5
+	double depthBetweenFillets{ 0.0 };			//6
+	double ratioOfLocalBucklingFlange{ 0.0 };	//7
+	double ratioOfLocalBucklingWeb{ 0.0 };		//8
+	double secondMomentOfAreaXX{ 0.0 };			//9
+	double secondMomentOfAreaYY{ 0.0 };			//10
+	double radiusOfGyrationXX{ 0.0 };			//11
+	double radiusOfGyrationYY{ 0.0 };			//12
+
+	double elasticModulusXX{ 0.0 };				//13
+	double elasticModulusYY{ 0.0 };				//14
+	double plasticModulusXX{ 0.0 };				//15
+	double plasticModulusYY{ 0.0 };				//16
+	double buckingParameter{ 0.0 };				//17
+	double torsionalIndex{ 0.0 };				//18
+	double warpingConstant{ 0.0 };				//19
+	double torsionalConstant{ 0.0 };			//20
+	double areaOfSection{ 0.0 };				//21
+
+	double epsilon = std::sqrt((275 / steelType));
+
+	std::vector<double> getAllData()
+	{
+		std::vector<double> alldata = {
+			massPerLength , depthOfSection , widthOfSection , thicknessOfWeb , thicknessOfFlange , rootRadius , depthBetweenFillets ,
+			ratioOfLocalBucklingFlange , ratioOfLocalBucklingWeb, secondMomentOfAreaXX, secondMomentOfAreaYY, radiusOfGyrationXX ,
+			radiusOfGyrationYY, elasticModulusXX, elasticModulusYY, plasticModulusXX, plasticModulusYY, buckingParameter, torsionalIndex,
+			warpingConstant, torsionalConstant, areaOfSection
+		};
+
+		return alldata;
+	}
 };
 
 class Beam
@@ -342,7 +388,12 @@ private:
 	std::vector<Force> forces;
 	std::vector<Moment> moments;
 	std::vector<Support *> supports;
-	std::string dimension;
+	std::vector<Force> shearForceDiagram;
+	std::vector<Moment> bendingMomentDiagram;
+	
+
+	
+
 public:
 	// Have to have the default constructor due to the compiler not making one when a custom constructor is declared.
 	Beam()
@@ -357,9 +408,19 @@ public:
 		this->supports = *supportPointer;
 	}
 
-	BeamData getData(std::string dimension, std::string mpl)
+	BeamData& getData()
 	{
-		this->dimension = dimension;
+		return beamData;
+	}
+
+	std::vector<Force>* getShearForceDiagram()
+	{
+		return &shearForceDiagram;
+	}
+
+	void setData(std::string dimension, std::string mpl)
+	{
+		beamData.dimension = dimension;
 
 		std::vector<std::string> fileData;
 		std::string data2 = "";
@@ -537,9 +598,88 @@ public:
 			}
 			temp = "";
 		}
+	}
 
-		return beamData;
+	// Calculates the buckling resistance moment of a laterally unrestrained beam Mb,Rd
+	double calculateBucklingResistanceMoment()
+	{
+		double gamma = 1;
+		double Mcrd = (beamData.plasticModulusXX * 1000 * beamData.steelType * 0.000001) / gamma;
+		return Mcrd;
+	}
 
+	double calculateMaxBendingMoment()
+	{
+
+	}
+
+	// Calculates class for outstand flange under uniform compression
+	int calculateClassOutstandFlange()
+	{
+		double cf = (beamData.widthOfSection - beamData.thicknessOfWeb - (2 * beamData.rootRadius)) / 2;
+		double ratio = cf / beamData.thicknessOfFlange;
+
+		// Gives correct class
+		if (ratio < (9 * beamData.epsilon))
+		{
+			return 1;
+		}
+		else if (ratio < (10 * beamData.epsilon))
+		{
+			return 2;
+		}
+		else if (ratio < (14 * beamData.epsilon))
+		{
+			return 3;
+		}
+	}
+
+	// Calculates class for web in bending
+	int calculateClassInternalCompressionPartBendingOnly()
+	{
+		// cw is depth between flanges
+		double cw = (beamData.depthOfSection - (2 * beamData.thicknessOfFlange) - (2 * beamData.rootRadius));
+		double ratio = cw / beamData.thicknessOfFlange;
+
+		if (ratio < (72 * beamData.epsilon))
+		{
+			return 1;
+		}
+		else if (ratio < (83 * beamData.epsilon))
+		{
+			return 2;
+
+		}
+		else if (ratio < (124 * beamData.epsilon))
+		{
+			return 3;
+		}
+	}
+
+	// Calculates class for web in compression
+	int calculateClassInternalCompressionPartCompressionOnly()
+	{
+		double cw = (beamData.depthOfSection - (2 * beamData.thicknessOfFlange) - (2 * beamData.rootRadius));
+		double ratio = cw / beamData.thicknessOfFlange;
+
+		if (ratio < (33 * beamData.epsilon))
+		{
+			return 1;
+		}
+		else if (ratio < (38 * beamData.epsilon))
+		{
+			return 2;
+
+		}
+		else if (ratio < (42 * beamData.epsilon))
+		{
+			return 3;
+		}
+	}
+
+	void setSteel(int steelType)
+	{
+		beamData.steelType = steelType;
 	}
 
 	void addSupport(Support* support)
@@ -585,27 +725,152 @@ public:
 	//}
 
 
-// Just for simply supported beams
-	std::vector<Force> calculateReactionForces()
-	{
 
+	// Calculates reaction forces, currently only does simply supported beams
+	void calculateReactionForces()
+	{
+		// loop through supports
+		// get distance to next support (POS S2 - POS S1)
+		// get forces between those 2 positions
+		// loop through forces
+		// calculate how far forces are from S1 abs(FORCE POS - SUPPORT POS)
+		// total moments then divide by distance from 1 support to the other
+
+		for (int i = 0; i < supports.size() - 1; i++)
+		{
+			std::vector<Force> validForces;
+
+			bool backwards = false;
+			bool repeat = false;
+
+			Support s1 = *supports[i];
+			Support s2;
+
+			int index = 0;
+
+			if ((i + 1) < supports.size())
+			{
+				index = i + 1;
+				s2 = *supports[index];
+			}
+			else {
+				index = i - 1;
+				s2 = *supports[index];
+			}
+
+			for (int y = 0; y < 2; y++)
+			{
+				// Swap supports when y = 1
+				if (y == 0)
+				{
+					backwards = false;
+				}
+				else {
+					Support temp = s1;
+					s1 = s2;
+					s2 = temp;
+					backwards = true;
+				}
+
+				double distanceToNextSupport = abs(s2.getPosition() - s1.getPosition());
+				double momentTotal = 0;
+
+				for (int x = 0; x < forces.size(); x++)
+				{
+					if (backwards)
+					{
+						if (forces[x].getPosition() < s1.getPosition() && forces[x].getPosition() > s2.getPosition())
+						{
+							Force f = forces[x];
+							double distanceFromSupportToForce = (f.getPosition() - s1.getPosition());
+							Moment m = Moment(distanceFromSupportToForce, f.getForce(), f.getAngle());
+							momentTotal += m.getMoment();
+						}
+					}
+					else
+					{
+						if (forces[x].getPosition() < s2.getPosition() && forces[x].getPosition() > s1.getPosition())
+						{
+							Force f = forces[x];
+							double distanceFromSupportToForce = (f.getPosition() - s1.getPosition());
+							Moment m = Moment(distanceFromSupportToForce, f.getForce(), 90);
+							momentTotal += m.getMoment();
+						}
+					}
+				}
+
+				double forceMag = momentTotal / distanceToNextSupport;
+
+				Force reactionForceAtSupport = Force(forceMag, s2.getPosition());
+
+				// Add the force to the correct support
+				if (backwards)
+				{
+					(*supports[index - 1]).addToReactionForce(reactionForceAtSupport);
+					forces.push_back(reactionForceAtSupport);
+					//std::cout << "Reaction force at " << (*supports[index - 1]).getPosition() << "m is " << (*supports[index - 1]).getReactionForce().getForce() << "N." << std::endl;
+				}
+				else
+				{
+					(*supports[index]).addToReactionForce(reactionForceAtSupport);
+					forces.push_back(reactionForceAtSupport);
+					//std::cout << "Reaction force at " << (*supports[index]).getPosition() << "m is " << (*supports[index]).getReactionForce().getForce() << "N." << std::endl;
+				}
+			}
+		}
 	}
 
-	// Just for simply supported beams, calculates moments at each force along the beam
-	std::vector<Moment> calculateBendingMomentDiagram()
-	{
 
+
+	// Just for simply supported beams, calculates moments at each force along the beam
+	void calculateBendingMomentDiagram()
+	{
+		// loop through each force and calculate moment at that point in beam from shear force diagram
 	}
 
 	// Just for simply supported beams, calculates shear at each force along the beam
-	std::vector<Force> calculateShearForceDiagram() {
+	void calculateShearForceDiagram()
+	{
+		// Loop through each force, sort them, then sum them
 
+		// Bubble sort the forces by position
+		for (int x = 0; x < forces.size(); x++)
+		{
+			for (int y = x + 1; y < forces.size(); y++)
+			{
+				if (forces[y].getPosition() < forces[x].getPosition())
+				{
+					Force temp = forces[y];
+					forces[y] = forces[x];
+					forces[x] = temp;
+				}
+			}
+		}
+
+		for (int x = 0; x < forces.size(); x++)
+		{
+			
+			if (x == 0 || x == (forces.size() - 1))
+			{
+				shearForceDiagram.push_back(Force(forces[x].getForce(), forces[x].getPosition()));
+			}
+			else if (x == 1)
+			{
+				shearForceDiagram.push_back(Force(forces[x].getForce() + forces[x - 1].getForce(), forces[x].getPosition()));
+			}
+			else if (x > 1)
+			{
+				shearForceDiagram.push_back(Force(forces[x].getForce() + shearForceDiagram[x - 1].getForce(), forces[x].getPosition()));
+			}
+		}
 	}
 	
+
+
 	// Calculates moment at specific position in beam
 	void calculateMomentAtPosition(double position)
 	{
-
+		// Use the area under shear force method?
 	}
 
 	void printMoments()
