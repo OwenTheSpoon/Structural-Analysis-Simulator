@@ -167,6 +167,19 @@ public:
 		this->position = position;
 	}
 
+	Moment(double momentValue, double position)
+	{
+		this->momentValue = momentValue;
+		this->position = position;
+	}
+
+	Moment(Force force)
+	{
+		this->force = force;
+		this->position = force.getPosition();
+		this->momentValue = force.getForce() * force.getPosition();
+	}
+
 	// angle is 90 as vertical and -90 as downwards
 	Moment(double position, double forceVec, double angle)
 	{
@@ -335,10 +348,35 @@ public:
 	}
 };
 
+class LateralRestraint
+{
+private:
+	double position;
+public:
+	LateralRestraint()
+	{
+
+	}
+
+	LateralRestraint(double position)
+	{
+		this->position = position;
+	}
+
+	void setPosition(double position)
+	{
+		this->position = position;
+	}
+
+	double getPosition()
+	{
+		return position;
+	}
+};
+
 struct BeamData {
 	std::string dimension;
 
-	int steelType = 1;
 
 
 	double massPerLength{ 0.0 };				//0
@@ -346,34 +384,37 @@ struct BeamData {
 	double widthOfSection{ 0.0 };				//2
 	double thicknessOfWeb{ 0.0 };				//3
 	double thicknessOfFlange{ 0.0 };			//4
-	double rootRadius{ 0.0 };					//5
+	double rootRadius{ 0.0 };					//5		r
 	double depthBetweenFillets{ 0.0 };			//6
 	double ratioOfLocalBucklingFlange{ 0.0 };	//7
 	double ratioOfLocalBucklingWeb{ 0.0 };		//8
-	double secondMomentOfAreaXX{ 0.0 };			//9
-	double secondMomentOfAreaYY{ 0.0 };			//10
+	double secondMomentOfAreaXX{ 0.0 };			//9		Ixx
+	double secondMomentOfAreaZZ{ 0.0 };			//10	Izz
 	double radiusOfGyrationXX{ 0.0 };			//11
 	double radiusOfGyrationYY{ 0.0 };			//12
 
 	double elasticModulusXX{ 0.0 };				//13
 	double elasticModulusYY{ 0.0 };				//14
-	double plasticModulusXX{ 0.0 };				//15
-	double plasticModulusYY{ 0.0 };				//16
+	double plasticModulusXX{ 0.0 };				//15	Wpl,y
+	double plasticModulusYY{ 0.0 };				//16	Wpl,x
 	double buckingParameter{ 0.0 };				//17
 	double torsionalIndex{ 0.0 };				//18
-	double warpingConstant{ 0.0 };				//19
+	double warpingConstant{ 0.0 };				//19	Iw
 	double torsionalConstant{ 0.0 };			//20
-	double areaOfSection{ 0.0 };				//21
+	double areaOfSection{ 0.0 };				//21	A
 
-	double epsilon = std::sqrt((275 / steelType));
+	double bucklingResistanceMoment = 0.0;
+
+	double steelType = 0.0;
+	double epsilon = 0.0;
 
 	std::vector<double> getAllData()
 	{
 		std::vector<double> alldata = {
 			massPerLength , depthOfSection , widthOfSection , thicknessOfWeb , thicknessOfFlange , rootRadius , depthBetweenFillets ,
-			ratioOfLocalBucklingFlange , ratioOfLocalBucklingWeb, secondMomentOfAreaXX, secondMomentOfAreaYY, radiusOfGyrationXX ,
+			ratioOfLocalBucklingFlange , ratioOfLocalBucklingWeb, secondMomentOfAreaXX, secondMomentOfAreaZZ, radiusOfGyrationXX ,
 			radiusOfGyrationYY, elasticModulusXX, elasticModulusYY, plasticModulusXX, plasticModulusYY, buckingParameter, torsionalIndex,
-			warpingConstant, torsionalConstant, areaOfSection
+			warpingConstant, torsionalConstant, areaOfSection, steelType, epsilon
 		};
 
 		return alldata;
@@ -390,9 +431,7 @@ private:
 	std::vector<Support *> supports;
 	std::vector<Force> shearForceDiagram;
 	std::vector<Moment> bendingMomentDiagram;
-	
-
-	
+	std::vector<LateralRestraint*> lateralRestraints;
 
 public:
 	// Have to have the default constructor due to the compiler not making one when a custom constructor is declared.
@@ -402,10 +441,11 @@ public:
 	}
 
 	// Creates a beam with a length and at least 1 support
-	Beam(double length, std::vector<Support*>* supportPointer)
+	Beam(double length, std::vector<Support*>* supportPointer, std::vector<LateralRestraint*>* lateralRestraints)
 	{
 		this->length = length;
 		this->supports = *supportPointer;
+		this->lateralRestraints = *lateralRestraints;
 	}
 
 	BeamData& getData()
@@ -573,7 +613,7 @@ public:
 									beamData.secondMomentOfAreaXX = std::stod(token3);
 									break;
 								case 11:
-									beamData.secondMomentOfAreaYY = std::stod(token3);
+									beamData.secondMomentOfAreaZZ = std::stod(token3);
 									break;
 								case 12:
 									beamData.radiusOfGyrationXX = std::stod(token3);
@@ -605,12 +645,51 @@ public:
 	{
 		double gamma = 1;
 		double Mcrd = (beamData.plasticModulusXX * 1000 * beamData.steelType * 0.000001) / gamma;
+
+		beamData.bucklingResistanceMoment = Mcrd;
+
 		return Mcrd;
 	}
 
-	double calculateMaxBendingMoment()
+	Moment getMaxBendingMoment()
 	{
+		// Use bubble sort to sort them by moment
+		for (int x = 0; x < bendingMomentDiagram.size(); x++)
+		{
+			for (int y = x + 1; y < bendingMomentDiagram.size(); y++)
+			{
+				if (bendingMomentDiagram[y].getMoment() < bendingMomentDiagram[x].getMoment())
+				{
+					Moment temp = bendingMomentDiagram[y];
+					bendingMomentDiagram[y] = bendingMomentDiagram[x];
+					bendingMomentDiagram[x] = temp;
+				}
+			}
+		}
 
+		return bendingMomentDiagram[bendingMomentDiagram.size() - 1];
+	}
+
+	double calculateElasticCriticalMoment()
+	{
+		// length between lateral restraits in mm
+		double effectiveLength = (lateralRestraints[1]->getPosition() - lateralRestraints[0]->getPosition()) * 1000;
+
+		//
+		double E = 210000;
+
+		//
+		double G = 81000;
+
+		double pi = M_PI;
+
+		long double part1 = (((M_PI * M_PI) * E * beamData.secondMomentOfAreaZZ * 10000.0) / (effectiveLength * effectiveLength)) * 1.02;
+		long double part2 = ((beamData.warpingConstant * (1000000000000.0)) / beamData.secondMomentOfAreaZZ * 10000.0);
+		long double part3 = (((effectiveLength * effectiveLength) * G * beamData.torsionalConstant * 10000.0) / ((M_PI * M_PI) * E * beamData.secondMomentOfAreaZZ * 10000.0));
+		long double part4 = (std::sqrt(part2 + part3));
+		
+		long double Mcr = (part1 * part4) / std::pow(10, 10);
+		return Mcr;
 	}
 
 	// Calculates class for outstand flange under uniform compression
@@ -677,9 +756,22 @@ public:
 		}
 	}
 
-	void setSteel(int steelType)
+	bool isBendingMomentCapacitySatisfactory()
+	{
+		if (beamData.bucklingResistanceMoment > getMaxBendingMoment().getMoment())
+		{
+			return true;
+		}
+		else 
+		{
+			return false;
+		}
+	}
+
+	void setSteel(double steelType)
 	{
 		beamData.steelType = steelType;
+		beamData.epsilon = std::sqrt(235/steelType);
 	}
 
 	void addSupport(Support* support)
@@ -710,21 +802,6 @@ public:
 	{
 		forces.push_back(force);
 	}
-
-	// Calculates the moments depending on the current forces
-	//void calculateMoments()
-	//{
-	//	for (int i = 0; i < forces.size(); i++)
-	//	{
-	//		Force force1 = forces.at(i);
-
-	//		// Add angle here eventually
-	//		std::cout << "Force of " << force1.getForce() << " acting " << force1.getPosition() << "m away from the left support." << std::endl;
-	//		moments.push_back(Moment(force1));
-	//	}
-	//}
-
-
 
 	// Calculates reaction forces, currently only does simply supported beams
 	void calculateReactionForces()
@@ -820,12 +897,26 @@ public:
 		}
 	}
 
-
-
 	// Just for simply supported beams, calculates moments at each force along the beam
 	void calculateBendingMomentDiagram()
 	{
 		// loop through each force and calculate moment at that point in beam from shear force diagram
+		
+		for (int i = 0; i < shearForceDiagram.size(); i++)
+		{
+			if (i == 0 || i == (shearForceDiagram.size() - 1))
+			{
+				bendingMomentDiagram.push_back(Moment(Force(0, shearForceDiagram[i].getPosition())));
+			}
+			else 
+			{
+				Force shearForce = shearForceDiagram[i - 1];
+
+				// Multiplies the shear force by the length it affects, sums each part to get the next one Eg (493.4*2.5) + (15.44*3.2) = 1282.908
+				Moment momentAtPosition = Moment(bendingMomentDiagram[i - 1].getMoment() + (shearForce.getForce() * (shearForceDiagram[i].getPosition() - shearForce.getPosition())), shearForceDiagram[i].getPosition());
+				bendingMomentDiagram.push_back(momentAtPosition);
+			}
+		}
 	}
 
 	// Just for simply supported beams, calculates shear at each force along the beam
@@ -865,20 +956,18 @@ public:
 		}
 	}
 	
-
-
-	// Calculates moment at specific position in beam
+	// Calculates moment at specific position in beam - NOT COMPLETE
 	void calculateMomentAtPosition(double position)
 	{
 		// Use the area under shear force method?
 	}
 
-	void printMoments()
+	void printBendingMomentDiagram()
 	{
-		for (int i = 0; i < moments.size(); i++)
+		for (int i = 0; i < bendingMomentDiagram.size(); i++)
 		{
-			Moment m1 = moments.at(i);
-			std::cout << "Moment of magnitude " << m1.getMoment() << "Nm at " << m1.getPosition() << "m from the left support.";
+			Moment m1 = bendingMomentDiagram[i];
+			std::cout << "Moment of magnitude " << m1.getMoment() << "Nm at " << m1.getPosition() << "m from the left support." << std::endl;
 		}
 	}
 };

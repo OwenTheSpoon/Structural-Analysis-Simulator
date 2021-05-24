@@ -20,15 +20,20 @@ int main()
 	supports.push_back(new PinnedSupport(0));
 	supports.push_back(new RollerSupport(10.8));
 
-	Beam beam = Beam(5, &supports);
+	std::vector<LateralRestraint*> lateralRestraints;
+	lateralRestraints.push_back(new LateralRestraint(2.5));
+	lateralRestraints.push_back(new LateralRestraint(5.7));
+
+	Beam beam = Beam(5, &supports, &lateralRestraints);
 
 	std::vector<Force> forces = {Force(-478, 2.5), Force(-267, 5.7)};
 	beam.setForces(&forces);
 	beam.setData("762x267", "173");
+	beam.setSteel(265.0);
+
 
 	BeamData data = beam.getData();
 	
-	beam.setSteel(265);
 
 	/*for(int i = 0; i < forces.size(); i++)
 	{
@@ -47,6 +52,7 @@ int main()
 
 	beam.calculateReactionForces();
 	beam.calculateShearForceDiagram();
+	beam.calculateBendingMomentDiagram();
 
 	std::vector<Moment> moments = (*beam.getMoments());
 	std::vector<Force> shearForceDiagram = (*beam.getShearForceDiagram());
@@ -66,6 +72,12 @@ int main()
 	{
 		std::cout << "[" << y << "] " << shearForceDiagram[y].getForce() << " at " << shearForceDiagram[y].getPosition() << "m from left support." << std::endl;
 	}
+
+	beam.printBendingMomentDiagram();
+
+	std::cout << beam.getMaxBendingMoment().getMoment() << std::endl;
+	std::cout << beam.isBendingMomentCapacitySatisfactory() << std::endl;
+	std::cout << beam.calculateElasticCriticalMoment() << std::endl;
 
 	std::cin >> x;
 }
